@@ -37,6 +37,11 @@ export const builder = {
     describe: "Executable used to install dependencies (npm, yarn, pnpm, ...)",
     type: "string",
     requiresArg: true,
+  },
+  "link": {
+    group: "Command Options:",
+    describe: "Only link dependencies, don't do any installation",
+    type: "string"
   }
 };
 
@@ -46,12 +51,14 @@ export default class BootstrapCommand extends Command {
   }
 
   initialize(callback) {
-    const { registry, npmClient } = this.options;
+    const { registry, link, npmClient } = this.options;
 
     this.npmConfig = {
       registry,
       npmClient,
     };
+
+    this.link = link;
 
     this.batchedPackages = this.toposort
       ? PackageUtilities.topologicallyBatchPackages(this.filteredPackages)
@@ -83,20 +90,28 @@ export default class BootstrapCommand extends Command {
    * @param {Function} callback
    */
   bootstrapPackages(callback) {
-    this.logger.info("", `Bootstrapping ${this.filteredPackages.length} packages`);
+    if (this.link) {
+      this.logger.info("", `Only linking packages`);
+      async.series([
+        // symlink packages and their binaries
+        (cb) => this.symlinkPackages(cb),
+      ], callback);
 
-    async.series([
-      // preinstall bootstrapped packages
-      (cb) => this.preinstallPackages(cb),
-      // install external dependencies
-      (cb) => this.installExternalDependencies(cb),
-      // symlink packages and their binaries
-      (cb) => this.symlinkPackages(cb),
-      // postinstall bootstrapped packages
-      (cb) => this.postinstallPackages(cb),
-      // prepublish bootstrapped packages
-      (cb) => this.prepublishPackages(cb)
-    ], callback);
+    } else {
+      this.logger.info("", `Bootstrapping ${this.filteredPackages.length} packages`);
+      async.series([
+        // preinstall bootstrapped packages
+        (cb) => this.preinstallPackages(cb),
+        // install external dependencies
+        (cb) => this.installExternalDependencies(cb),
+        // symlink packages and their binaries
+        (cb) => this.symlinkPackages(cb),
+        // postinstall bootstrapped packages
+        (cb) => this.postinstallPackages(cb),
+        // prepublish bootstrapped packages
+        (cb) => this.prepublishPackages(cb)
+      ], callback);
+    }
   }
 
   runScriptInPackages(scriptName, callback) {
