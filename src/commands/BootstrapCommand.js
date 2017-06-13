@@ -41,7 +41,8 @@ export const builder = {
   "link": {
     group: "Command Options:",
     describe: "Only link dependencies, don't do any installation",
-    type: "string"
+    type: "boolean",
+    default: false
   }
 };
 
